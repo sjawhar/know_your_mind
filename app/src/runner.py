@@ -61,7 +61,7 @@ def main(data_path, scale=False):
     data, num_features, num_classes = get_data(data_path, scale)
     env = Env(
         data,
-        cnn_reward_model,
+        lambda *args: cnn_reward_model(*args, size1=10, size2=100),
         len_max=128,
         num_features=num_features,
         num_classes=num_classes,
@@ -82,7 +82,7 @@ def main(data_path, scale=False):
     print(best_state, best_reward)
 
     # RL.plot_cost()
-    pickle.dump(RL.cost_history, open("cost_history", "wb"))
+    pickle.dump(agent.cost_history, open("cost_history", "wb"))
     pickle.dump(reward_history, open("reward_history", "wb"))
     pickle.dump(best_state, open("best_state", "wb"))
 

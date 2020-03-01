@@ -66,8 +66,8 @@ def max_pool_1x2(x):
 def get_conv_network(
     num_features, num_classes, size1=10, size2=164, lambd=0.001, learning_rate=0.001
 ):
-    xs = tf.placeholder(tf.float32, [None, num_features])  # 1*64
-    ys = tf.placeholder(tf.float32, [None, num_classes])  # 2 is the classes of the data
+    xs = tf.placeholder(tf.float32, [None, num_features])
+    ys = tf.placeholder(tf.float32, [None, num_classes])
     keep_prob = tf.placeholder(tf.float32)
     x_image = tf.reshape(xs, [-1, 1, num_features, 1])
 
