@@ -1,0 +1,25 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[packages]
+matplotlib = "*"
+numpy = "*"
+pandas = "*"
+scipy = "*"
+sklearn = "*"
+tensorflow = "<2.0.0"
+
+[dev-packages]
+black = "==19.10b0"
+
+[requires]
+python_version = "3.7"
+
+[pipenv]
+allow_prereleases = true
+
+[scripts]
+format = "black --verbose --target-version py37 --exclude /(\\.pytest_cache|\\.ipynb_checkpoints)/ ."
+lint = "pipenv run format --check"
