@@ -5,7 +5,7 @@ import scipy.io as sc
 from agent import DeepQNetwork
 from environment import Env
 from pathlib import Path
-from reward import cnn_reward_model
+from reward import cnn_reward_model, one_hot
 
 
 def get_data(data_path, scale):
@@ -24,21 +24,18 @@ def get_data(data_path, scale):
                 X = preprocessing.scale(X)
             data[dset] = X
 
-    num_features = data[dsets[0]].shape[1]
-
     _, Y = np.unique(Y, return_inverse=True)
+    num_features = data[dsets[0]].shape[1]
+    num_classes = Y.max() + 1
+
     previous = 0
     for dset in dsets:
         X = data[dset]
         dset_len = len(X)
-        data[dset] = np.hstack(
-            [X, Y[previous : previous + dset_len].reshape(dset_len, 1)]
-        )
+        data[dset] = np.hstack([X, Y[previous : previous + dset_len].reshape(-1, 1)])
         previous += dset_len
 
-    test_data = data["test"]
-    np.random.shuffle(test_data)
-    return data["train"], test_data, num_features, Y.max() + 1
+    return data["train"], data["test"], num_features, num_classes
 
 
 def run_env(
@@ -50,25 +47,30 @@ def run_env(
     episodes=50,
     reward_history=[],
 ):
-    for i in range(episodes):
-        # initial state
+    for episode in range(1, episodes + 1):
+        print("==========")
+        print("EPISODE", episode)
+        print("==========")
         old_state = env.reset()
         for step in range(1, episode_steps + 1):
+            print("----------")
+            print("STEP", step)
+            print("----------")
             action = agent.choose_action(old_state)  #
-            # print('episode', i, 'step', step, 'Action', action, 'state', state)
+            # print('step', step, 'Action', action, 'state', state)
 
-            new_state, reward, done, acc, indices = env.step(action, step, i)
-            # print('new_state, reward, done, acc', new_state, reward, done, acc)
+            new_state, reward, done, reward_raw, indices = env.step(action)
+            # print('new_state, reward, done, reward_raw', new_state, reward, done, reward_raw)
             # store the state, action, reward and the next state
             # print(old_state.shape, action.shape, reward.shape, new_state.shape)
             agent.store_transition(old_state, action, reward, indices, new_state)
-            reward_history.append([i, step, reward])
+            reward_history.append([episode, step, reward])
             # record best reward
             current_reward = reward
 
             if current_reward > best_reward:
                 best_reward = reward
-                best_state = [acc, reward, old_state, new_state, indices]
+                best_state = [reward_raw, reward, old_state, new_state, indices]
             if (step >= 200) and (step % 5 == 0):  # learn once for each 5 steps
                 agent.learn()
             if done:
@@ -79,12 +81,13 @@ def run_env(
 
 
 def main(data_path, results_dir, scale=False):
-    data, test_data, num_features, num_classes = get_data(data_path, scale)
+    train_data, test_data, num_features, num_classes = get_data(data_path, scale)
     reward_model = lambda X, **kwargs: cnn_reward_model(
         X, num_classes, size1=10, size2=100, **kwargs
     )
     env = Env(
-        data,
+        train_data,
+        test_data,
         reward_model,
         len_max=128,
         num_features=num_features,
@@ -106,9 +109,9 @@ def main(data_path, results_dir, scale=False):
     print(best_state, best_reward)
 
     _, _, _, attention, indices = best_state
-    features = list(indices[attention["start"] : attention["end"]]) + [-1]
+    features = list(indices[int(attention["start"]) : int(attention["end"])]) + [-1]
     test_acc = reward_model(
-        data[:, features], test_data=test_data[:, features], test_percentage=0
+        train_data[:, features], test_data=test_data[:, features], test_percentage=0
     )
     print("Final accuracy:", test_acc)
 

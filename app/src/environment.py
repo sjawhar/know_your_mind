@@ -8,7 +8,8 @@ class Env(object):
 
     def __init__(
         self,
-        data,
+        train_data,
+        test_data,
         reward_model,
         len_max=128,
         num_features=64,
@@ -25,7 +26,6 @@ class Env(object):
         self.bar["length"] = 64  # the length of attention bar
         self.bar["start"] = 0  # the initial point of attention bar
         self.beta = 0.1
-        self.data = data
         self.len_max = len_max
         self.min_length = 15
         self.num_actions = 4
@@ -33,6 +33,8 @@ class Env(object):
         self.num_features = num_features
         self.reward = 0
         self.reward_model = reward_model
+        self.test_data = test_data
+        self.train_data = train_data
 
         if feature_indices is None:
             feature_indices = np.random.choice(
@@ -44,25 +46,27 @@ class Env(object):
     def clip(self, dd):
         return np.clip(dd, a_min=0, a_max=self.len_max - 1)
 
-    def step(self, action, step, episode):
-        done = False
+    def featurize_data(self, data):
+        start = int(self.bar["start"])
+        end = int(self.bar["end"])
+        feature_indices = self.feature_indices[start:end]
+        return np.hstack([data[:, feature_indices], data[:, -1:]])
 
+    def step(self, action):
+        reward_raw = self.reward_model(
+            self.featurize_data(self.train_data),
+            test_data=self.featurize_data(self.test_data),
+        )
+        done = reward_raw > 0.5
+
+        # Silhouette Coefficient reward ranges from [-1,1], reward+1 range [0,2]
         start = int(self.bar["start"])
         length = int(self.bar["length"])
         end = int(self.bar["end"])
-
-        feature_indices = self.feature_indices[start:end]
-        data = np.hstack([self.data[:, feature_indices], self.data[:, -1:]])
-        acc = self.reward_model(data)
-
-        # Silhouette Coefficient reward ranges from [-1,1], reward+1 range [0,2]
         self.reward = (
-            math.exp(acc) / (math.exp(1) - 1) - self.beta * (end - start) / self.len_max
+            math.exp(reward_raw) / (math.exp(1) - 1)
+            - self.beta * (end - start) / self.len_max
         )
-
-        # done and reward
-        if acc > 0.5:
-            done = True
 
         move = np.random.randint(1, high=15, size=1)
         # To caculate the next state from the current state
@@ -90,7 +94,7 @@ class Env(object):
             self.bar["end"] = self.bar["start"] + self.min_length
             self.bar["length"] = self.bar["end"] - self.bar["start"]
 
-        return self.bar, self.reward, done, acc, self.feature_indices
+        return self.bar, self.reward, done, reward_raw, self.feature_indices
 
     def reset(self):
         self.bar["start"] = (self.len_max - self.num_features) / 2

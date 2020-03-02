@@ -121,9 +121,6 @@ def get_batches_and_test(data, num_features, num_batches=9, test_percentage=0.1)
     test_split = int(data_size * (1 - test_percentage))
 
     test_indices = shuffle_order[test_split:]
-    X_test = data[test_indices, :-1]
-    Y_test = one_hot(data[test_indices, -1:])
-
     train_indices = shuffle_order[: test_split - (test_split % num_batches)]
     X_train = data[train_indices, :-1].reshape(num_batches, -1, num_features)
     Y_train = one_hot(data[train_indices, -1:]).reshape(
@@ -131,7 +128,7 @@ def get_batches_and_test(data, num_features, num_batches=9, test_percentage=0.1)
     )
     batches = [(X_train[i], Y_train[i]) for i in range(num_batches)]
 
-    return batches, X_test, Y_test
+    return batches, data[test_indices]
 
 
 def cnn_reward_model(
@@ -146,7 +143,7 @@ def cnn_reward_model(
     size1=10,
     size2=164,
     test_data=None,
-    test_percentage=0.1,
+    test_percentage=0,
 ):
     num_features = data.shape[1] - 1
     network = get_conv_network(
@@ -159,11 +156,12 @@ def cnn_reward_model(
     )
 
     xs, ys, keep_prob, train_step, embedding, prediction, cross_entropy = network
-    batches, X_test, Y_test = get_batches_and_test(
+    batches, test_split_data = get_batches_and_test(
         data, num_features, num_batches=num_batches, test_percentage=test_percentage
     )
-    if test_data is not None:
-        X_test, Y_test = test_data[:, :-1], test_data[:, -1:]
+    if test_data is None:
+        test_data = test_split_data
+    X_test, Y_test = test_data[:, :-1], one_hot(test_data[:, -1:])
 
     with tf.Session(config=TF_CONFIG) as sess:
         sess.run(tf.global_variables_initializer())
@@ -173,9 +171,9 @@ def cnn_reward_model(
                     train_step, feed_dict={xs: X_train, ys: Y_train, keep_prob: keep},
                 )
             if (epoch % 10) == 0:
-                print("==========")
+                print()
                 print("EPOCH", epoch)
-                print("==========")
+                print()
                 for set_name, X, Y in [
                     ("Train", X_train, Y_train),
                     ("Test", X_test, Y_test),
