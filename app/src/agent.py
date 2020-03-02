@@ -37,27 +37,25 @@ class DeepQNetwork:
         reward_decay=0.9,
     ):
 
-        self.num_features = num_features
+        self.batch_size = batch_size
+        self.cost_his = []
+        self.dueling = dueling
+        self.epsilon = 0 if e_greedy_increment is not None else self.epsilon_max
+        self.epsilon_increment = e_greedy_increment
+        self.epsilon_max = e_greedy
+        self.gamma = reward_decay
+        self.learn_step_counter = 0
+        self.len_max = len_max
+        self.lr = learning_rate
+        self.memory_size = memory_size
         self.num_actions = num_actions
         self.num_features = num_features
-        self.lr = learning_rate
-        self.gamma = reward_decay
-        self.epsilon_max = e_greedy
         self.replace_target_iter = replace_target_iter
-        self.memory_size = memory_size
-        self.batch_size = batch_size
-        self.epsilon_increment = e_greedy_increment
-        self.epsilon = 0 if e_greedy_increment is not None else self.epsilon_max
-        self.dueling = dueling
-        self.len_max = len_max
-        # total learning step
-        self.learn_step_counter = 0
 
-        # initialize zero memory [s, a, r, s_]
-        # num_features =2, devotes start and end. add 1, is the length.
+        # [s, a, r, indices, s_]
         self.memory = np.zeros(
             (self.memory_size, (num_features + 1) * 2 + 2 + self.len_max)
-        )  # 128 is the length of indices
+        )
 
         # consist of [target_net, evaluate_net]
         self._build_net()
@@ -75,7 +73,6 @@ class DeepQNetwork:
             tf.summary.FileWriter("logs/", self.sess.graph)
 
         self.sess.run(tf.global_variables_initializer())
-        self.cost_his = []  # cost history
 
     # Two nets have the same structure but different parameters.
     # One with parameters eval_net_params, another with target_net_params.

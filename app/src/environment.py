@@ -41,10 +41,6 @@ class Env(object):
         self.feature_indices = feature_indices
         print("feature indices", feature_indices)
 
-        with open("feature_indices.p", "wb") as f:
-            pickle.dump(self.feature_indices, f)
-        print("feature_indices.p saved in local position.")
-
     def clip(self, dd):
         return np.clip(dd, a_min=0, a_max=self.len_max - 1)
 

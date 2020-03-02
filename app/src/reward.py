@@ -9,6 +9,9 @@ from sklearn import preprocessing
 from sklearn.metrics import classification_report
 from sklearn.neighbors import KNeighborsClassifier
 
+TF_CONFIG = tf.ConfigProto()
+TF_CONFIG.gpu_options.allow_growth = True
+
 # this function is used to transfer one column label to one hot label
 def one_hot(y_):
     # Function to encode output labels from number indexes
@@ -156,11 +159,10 @@ def cnn_reward_model(
         lambd=lambd,
         learning_rate=learning_rate,
     )
+
     xs, ys, keep_prob, train_step, embedding, prediction, cross_entropy = network
 
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
-    with tf.Session(config=config) as sess:
+    with tf.Session(config=TF_CONFIG) as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, num_epochs + 1):
             for X_train, Y_train in batches:
