@@ -38,7 +38,7 @@ class DeepQNetwork:
     ):
 
         self.batch_size = batch_size
-        self.cost_his = []
+        self.cost_history = []
         self.dueling = dueling
         self.epsilon = 0 if e_greedy_increment is not None else self.epsilon_max
         self.epsilon_increment = e_greedy_increment
@@ -348,7 +348,7 @@ class DeepQNetwork:
                 self.q_target: q_target,
             },
         )
-        self.cost_his.append(self.cost)
+        self.cost_history.append(self.cost)
 
         if self.epsilon_increment != None and self.epsilon < self.epsilon_max:
             self.epsilon = min(self.epsilon + self.epsilon_increment, self.epsilon_max)
@@ -357,7 +357,7 @@ class DeepQNetwork:
     def plot_cost(self):
         import matplotlib.pyplot as plt
 
-        plt.plot(np.arange(len(self.cost_his)), self.cost_his)
+        plt.plot(np.arange(len(self.cost_history)), self.cost_history)
         plt.ylabel("Cost")
         plt.xlabel("training steps")
         plt.show()

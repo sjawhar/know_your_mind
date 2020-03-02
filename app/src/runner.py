@@ -106,13 +106,13 @@ def main(data_path, results_dir, scale=False):
         # output_graph=True,
     )
     best_reward, best_state, reward_history = run_env(env, agent)
-    print(best_state, best_reward)
-
     _, _, _, attention, indices = best_state
     features = list(indices[int(attention["start"]) : int(attention["end"])]) + [-1]
     test_acc = reward_model(
         train_data[:, features], test_data=test_data[:, features], test_percentage=0
     )
+    print("Best state", best_state)
+    print("Best reward", best_reward)
     print("Final accuracy:", test_acc)
 
     results_dir = Path(results_dir).resolve()
