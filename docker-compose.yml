@@ -11,6 +11,7 @@ services:
       - ./notebooks:/tf/notebooks
     ports:
       - 8888:8888
+      - 5678:5678
     user: 1000:1000
     command:
       - jupyter

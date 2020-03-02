@@ -33,7 +33,7 @@ def compute_accuracy(sess, network, X, Y_true, keep):
 
     Y_pred = sess.run(output, feed_dict={xs: X, keep_prob: keep})
     correct = tf.equal(tf.argmax(Y_pred, 1), Y_true)
-    accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
+    accuracy = tf.math.reduce_mean(tf.cast(correct, tf.float32))
     return sess.run(accuracy, feed_dict={xs: X, ys: Y_true, keep_prob: keep})
 
 
@@ -97,7 +97,10 @@ def get_conv_network(
     # the error between prediction and real data
     l2 = lambd * sum(tf.nn.l2_loss(tf_var) for tf_var in tf.trainable_variables())
     cost = (
-        tf.losses.sparse_softmax_cross_entropy(logits=prediction, labels=ys,) + l2
+        tf.math.reduce_mean(
+            tf.nn.sparse_softmax_cross_entropy_with_logits(logits=prediction, labels=ys)
+        )
+        + l2
     )  # Softmax loss
     train_step = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 
@@ -187,7 +190,7 @@ def cnn_reward_model(
             embedding, feed_dict={xs: X_test, ys: Y_test, keep_prob: keep}
         )
 
-    Y_train = np.vstack([y for _, y in batches])
+    Y_train = np.concatenate([y for _, y in batches])
     clf = KNeighborsClassifier(n_neighbors=n_neighbors)
     clf.fit(D_train, Y_train)
     Y_pred = clf.predict(D_test)

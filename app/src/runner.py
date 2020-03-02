@@ -136,7 +136,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="know_your_mind")
     parser.add_argument("DATA_FILE")
     parser.add_argument("RESULTS_DIR")
+    parser.add_argument("-d", "--debug", action="store_true")
 
     args = parser.parse_args()
+
+    if args.debug:
+        import ptvsd
+
+        ptvsd.enable_attach(address=("0.0.0.0", 5678))
+        ptvsd.wait_for_attach()
 
     main(args.DATA_FILE, args.RESULTS_DIR)

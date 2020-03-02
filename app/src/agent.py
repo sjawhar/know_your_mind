@@ -188,7 +188,7 @@ class DeepQNetwork:
         with tf.variable_scope("loss"):
             # loss = [(q_target-q_eval)^2]/n where n = len(q_target)
             self.loss = tf.reduce_mean(
-                tf.squared_difference(self.q_target, self.q_eval)
+                tf.math.squared_difference(self.q_target, self.q_eval)
             )
         with tf.variable_scope("train"):
             self._train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
