@@ -173,23 +173,22 @@ def cnn_reward_model(
                     train_step, feed_dict={xs: X_train, ys: Y_train, keep_prob: keep},
                 )
             if (epoch % 10) == 0:
-                cost = sess.run(
-                    cross_entropy, feed_dict={xs: X_test, ys: Y_test, keep_prob: keep}
-                )
-                t1 = time.clock()
-                conv_acc = compute_accuracy(sess, network, X_train, Y_train, keep)
-                t2 = time.clock()
-                print("testing time", t2 - t1)
-                print(
-                    "epoch",
-                    epoch,
-                    ", train acc",
-                    conv_acc,
-                    ", test acc",
-                    compute_accuracy(sess, network, X_test, Y_test, keep),
-                    ", the cost is",
-                    cost,
-                )
+                print("==========")
+                print("EPOCH", epoch)
+                print("==========")
+                for set_name, X, Y in [
+                    ("Train", X_train, Y_train),
+                    ("Test", X_test, Y_test),
+                ]:
+                    t1 = time.clock()
+                    conv_acc = compute_accuracy(sess, network, X, Y, keep)
+                    t2 = time.clock()
+                    cost = sess.run(
+                        cross_entropy, feed_dict={xs: X, ys: Y, keep_prob: keep}
+                    )
+                    print(set_name, "CNN accuracy", conv_acc)
+                    print(set_name, "CNN cost", cost)
+                    print(set_name, "prediction time", t2 - t1)
 
         D_train = np.vstack(
             [
@@ -208,8 +207,8 @@ def cnn_reward_model(
     clf = KNeighborsClassifier(n_neighbors=n_neighbors)
     clf.fit(D_train, Y_train)
     Y_pred = clf.predict(D_test)
-    knn_result = clf.score(D_test, Y_test)
-    print(knn_result)
+    acc = clf.score(D_test, Y_test)
+    print("Test KNN Accuracy", acc)
     print(classification_report(Y_pred, Y_test, digits=4))
 
-    return knn_result
+    return acc
