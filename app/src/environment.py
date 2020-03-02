@@ -49,8 +49,8 @@ class Env(object):
     def featurize_data(self, data):
         start = int(self.bar["start"])
         end = int(self.bar["end"])
-        feature_indices = self.feature_indices[start:end]
-        return np.hstack([data[:, feature_indices], data[:, -1:]])
+        feature_indices = list(self.feature_indices[start:end]) + [-1]
+        return data[:, feature_indices]
 
     def step(self, action):
         reward_raw = self.reward_model(

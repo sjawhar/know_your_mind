@@ -5,7 +5,7 @@ import scipy.io as sc
 from agent import DeepQNetwork
 from environment import Env
 from pathlib import Path
-from reward import cnn_reward_model, one_hot
+from reward import cnn_reward_model
 
 
 def get_data(data_path, scale):
@@ -83,7 +83,7 @@ def run_env(
 def main(data_path, results_dir, scale=False):
     train_data, test_data, num_features, num_classes = get_data(data_path, scale)
     reward_model = lambda X, **kwargs: cnn_reward_model(
-        X, num_classes, size1=10, size2=100, **kwargs
+        X, num_classes, size1=10, size2=100, num_batches=50, **kwargs
     )
     env = Env(
         train_data,

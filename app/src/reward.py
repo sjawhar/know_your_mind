@@ -12,14 +12,6 @@ from sklearn.neighbors import KNeighborsClassifier
 TF_CONFIG = tf.ConfigProto()
 TF_CONFIG.gpu_options.allow_growth = True
 
-# this function is used to transfer one column label to one hot label
-def one_hot(y_):
-    # Function to encode output labels from number indexes
-    # e.g.: [[5], [0], [3]] --> [[0, 0, 0, 0, 0, 1], [1, 0, 0, 0, 0, 0], [0, 0, 0, 1, 0, 0]]
-    y_ = y_.reshape(len(y_))
-    n_values = int(np.max(y_) + 1)
-    return np.eye(n_values)[np.array(y_, dtype=np.int32)]
-
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
     nyq = 0.5 * fs
@@ -40,7 +32,7 @@ def compute_accuracy(sess, network, X, Y_true, keep):
     xs, ys, keep_prob, _, _, output, _ = network
 
     Y_pred = sess.run(output, feed_dict={xs: X, keep_prob: keep})
-    correct = tf.equal(tf.argmax(Y_pred, 1), tf.argmax(Y_true, 1))
+    correct = tf.equal(tf.argmax(Y_pred, 1), Y_true)
     accuracy = tf.reduce_mean(tf.cast(correct, tf.float32))
     return sess.run(accuracy, feed_dict={xs: X, ys: Y_true, keep_prob: keep})
 
@@ -70,7 +62,7 @@ def get_conv_network(
     num_features, num_classes, size1=10, size2=164, lambd=0.001, learning_rate=0.001
 ):
     xs = tf.placeholder(tf.float32, [None, num_features])
-    ys = tf.placeholder(tf.float32, [None, num_classes])
+    ys = tf.placeholder(tf.int32, [None])
     keep_prob = tf.placeholder(tf.float32)
     x_image = tf.reshape(xs, [-1, 1, num_features, 1])
 
@@ -104,15 +96,12 @@ def get_conv_network(
 
     # the error between prediction and real data
     l2 = lambd * sum(tf.nn.l2_loss(tf_var) for tf_var in tf.trainable_variables())
-    cross_entropy = (
-        tf.reduce_mean(
-            tf.nn.softmax_cross_entropy_with_logits(logits=prediction, labels=ys)
-        )
-        + l2
+    cost = (
+        tf.losses.sparse_softmax_cross_entropy(logits=prediction, labels=ys,) + l2
     )  # Softmax loss
-    train_step = tf.train.AdamOptimizer(learning_rate).minimize(cross_entropy)
+    train_step = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 
-    return xs, ys, keep_prob, train_step, h_fc1, prediction, cross_entropy
+    return xs, ys, keep_prob, train_step, h_fc1, prediction, cost
 
 
 def get_batches_and_test(data, num_features, num_batches=9, test_percentage=0.1):
@@ -123,9 +112,7 @@ def get_batches_and_test(data, num_features, num_batches=9, test_percentage=0.1)
     test_indices = shuffle_order[test_split:]
     train_indices = shuffle_order[: test_split - (test_split % num_batches)]
     X_train = data[train_indices, :-1].reshape(num_batches, -1, num_features)
-    Y_train = one_hot(data[train_indices, -1:]).reshape(
-        num_batches, X_train.shape[1], -1
-    )
+    Y_train = data[train_indices, -1].reshape(num_batches, -1)
     batches = [(X_train[i], Y_train[i]) for i in range(num_batches)]
 
     return batches, data[test_indices]
@@ -155,13 +142,13 @@ def cnn_reward_model(
         learning_rate=learning_rate,
     )
 
-    xs, ys, keep_prob, train_step, embedding, prediction, cross_entropy = network
+    xs, ys, keep_prob, train_step, embedding, prediction, cost = network
     batches, test_split_data = get_batches_and_test(
         data, num_features, num_batches=num_batches, test_percentage=test_percentage
     )
     if test_data is None:
         test_data = test_split_data
-    X_test, Y_test = test_data[:, :-1], one_hot(test_data[:, -1:])
+    X_test, Y_test = test_data[:, :-1], test_data[:, -1]
 
     with tf.Session(config=TF_CONFIG) as sess:
         sess.run(tf.global_variables_initializer())
@@ -181,11 +168,11 @@ def cnn_reward_model(
                     t1 = time.clock()
                     conv_acc = compute_accuracy(sess, network, X, Y, keep)
                     t2 = time.clock()
-                    cost = sess.run(
-                        cross_entropy, feed_dict={xs: X, ys: Y, keep_prob: keep}
+                    conv_cost = sess.run(
+                        cost, feed_dict={xs: X, ys: Y, keep_prob: keep}
                     )
                     print(set_name, "CNN accuracy", conv_acc)
-                    print(set_name, "CNN cost", cost)
+                    print(set_name, "CNN cost", conv_cost)
                     print(set_name, "prediction time", t2 - t1)
 
         D_train = np.vstack(
@@ -200,8 +187,7 @@ def cnn_reward_model(
             embedding, feed_dict={xs: X_test, ys: Y_test, keep_prob: keep}
         )
 
-    Y_train = np.argmax(np.vstack([y for _, y in batches]), axis=1)
-    Y_test = np.argmax(Y_test, axis=1)
+    Y_train = np.vstack([y for _, y in batches])
     clf = KNeighborsClassifier(n_neighbors=n_neighbors)
     clf.fit(D_train, Y_train)
     Y_pred = clf.predict(D_test)
