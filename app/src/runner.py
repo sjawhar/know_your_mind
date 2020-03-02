@@ -4,34 +4,56 @@ import pickle
 import scipy.io as sc
 from agent import DeepQNetwork
 from environment import Env
+from pathlib import Path
 from reward import cnn_reward_model
 
 
 def get_data(data_path, scale):
+    data = {}
+    Y = []
+    dsets = ["train", "test"]
     with h5py.File(data_path, "r") as f:
-        X = f["data"][:, :-1]
-        Y = f["data"][:, -1]
+        for dset in dsets:
+            X = f[dset][:, :-1]
+            Y += list(f[dset][:, -1])
 
-    print(X.shape)
-    num_features = X.shape[1]
+            print(dset, X.shape)
 
-    if scale is True:
-        # z-score scaling
-        X = preprocessing.scale(X[:, :-1])
+            if scale is True:
+                # z-score scaling
+                X = preprocessing.scale(X)
+            data[dset] = X
+
+    num_features = data[dsets[0]].shape[1]
 
     _, Y = np.unique(Y, return_inverse=True)
-    data = np.hstack([X, Y.reshape(-1, 1)])
-    return data, num_features, Y.max() + 1
+    previous = 0
+    for dset in dsets:
+        X = data[dset]
+        dset_len = len(X)
+        data[dset] = np.hstack(
+            [X, Y[previous : previous + dset_len].reshape(dset_len, 1)]
+        )
+        previous += dset_len
+
+    test_data = data["test"]
+    np.random.shuffle(test_data)
+    return data["train"], test_data, num_features, Y.max() + 1
 
 
-def run_env(env, agent, best_reward=0, best_state=[], reward_history=[]):
-    # start training
-    MAX_EPISODES = 50
-    MAX_EP_STEPS = 50
-    for i in range(MAX_EPISODES):
+def run_env(
+    env,
+    agent,
+    best_reward=0,
+    best_state=[],
+    episode_steps=50,
+    episodes=50,
+    reward_history=[],
+):
+    for i in range(episodes):
         # initial state
         old_state = env.reset()
-        for step in range(MAX_EP_STEPS):
+        for step in range(1, episode_steps + 1):
             action = agent.choose_action(old_state)  #
             # print('episode', i, 'step', step, 'Action', action, 'state', state)
 
@@ -47,7 +69,7 @@ def run_env(env, agent, best_reward=0, best_state=[], reward_history=[]):
             if current_reward > best_reward:
                 best_reward = reward
                 best_state = [acc, reward, old_state, new_state, indices]
-            if (step > 200) and (step % 5 == 0):  # learn once for each 5 steps
+            if (step >= 200) and (step % 5 == 0):  # learn once for each 5 steps
                 agent.learn()
             if done:
                 print("This episode is done, start the next episode")
@@ -56,12 +78,14 @@ def run_env(env, agent, best_reward=0, best_state=[], reward_history=[]):
     return best_reward, best_state, reward_history
 
 
-def main(data_path, scale=False):
-
-    data, num_features, num_classes = get_data(data_path, scale)
+def main(data_path, results_dir, scale=False):
+    data, test_data, num_features, num_classes = get_data(data_path, scale)
+    reward_model = lambda X, **kwargs: cnn_reward_model(
+        X, num_classes, size1=10, size2=100, **kwargs
+    )
     env = Env(
         data,
-        lambda *args: cnn_reward_model(*args, size1=10, size2=100),
+        reward_model,
         len_max=128,
         num_features=num_features,
         num_classes=num_classes,
@@ -81,11 +105,35 @@ def main(data_path, scale=False):
     best_reward, best_state, reward_history = run_env(env, agent)
     print(best_state, best_reward)
 
-    # RL.plot_cost()
-    pickle.dump(agent.cost_history, open("cost_history", "wb"))
-    pickle.dump(reward_history, open("reward_history", "wb"))
-    pickle.dump(best_state, open("best_state", "wb"))
+    _, _, _, attention, indices = best_state
+    features = list(indices[attention["start"] : attention["end"]]) + [-1]
+    test_acc = reward_model(
+        data[:, features], test_data=test_data[:, features], test_percentage=0
+    )
+    print("Final accuracy:", test_acc)
+
+    results_dir = Path(results_dir).resolve()
+    if not results_dir.exists():
+        results_dir.mkdir()
+    with open(results_dir / "results.pickle", "wb") as f:
+        pickle.dump(
+            {
+                "best_state": best_state,
+                "cost_history": agent.cost_history,
+                "reward_history": reward_history,
+                "test_acc": test_acc,
+            },
+            f,
+        )
 
 
 if __name__ == "__main__":
-    main("../data/eeg-s.h5")
+    import argparse
+
+    parser = argparse.ArgumentParser(prog="know_your_mind")
+    parser.add_argument("DATA_FILE")
+    parser.add_argument("RESULTS_DIR")
+
+    args = parser.parse_args()
+
+    main(args.DATA_FILE, args.RESULTS_DIR)

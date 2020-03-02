@@ -53,7 +53,7 @@ class Env(object):
 
         feature_indices = self.feature_indices[start:end]
         data = np.hstack([self.data[:, feature_indices], self.data[:, -1:]])
-        acc = self.reward_model(data, len(feature_indices), self.num_classes)
+        acc = self.reward_model(data)
 
         # Silhouette Coefficient reward ranges from [-1,1], reward+1 range [0,2]
         self.reward = (

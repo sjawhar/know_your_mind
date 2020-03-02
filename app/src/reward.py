@@ -136,7 +136,6 @@ def get_batches_and_test(data, num_features, num_batches=9, test_percentage=0.1)
 
 def cnn_reward_model(
     data,
-    num_features,
     num_classes,
     keep=1,
     lambd=0.001,
@@ -146,11 +145,10 @@ def cnn_reward_model(
     num_epochs=20,
     size1=10,
     size2=164,
+    test_data=None,
     test_percentage=0.1,
 ):
-    batches, X_test, Y_test = get_batches_and_test(
-        data, num_features, num_batches=num_batches, test_percentage=test_percentage
-    )
+    num_features = data.shape[1] - 1
     network = get_conv_network(
         num_features,
         num_classes,
@@ -161,6 +159,11 @@ def cnn_reward_model(
     )
 
     xs, ys, keep_prob, train_step, embedding, prediction, cross_entropy = network
+    batches, X_test, Y_test = get_batches_and_test(
+        data, num_features, num_batches=num_batches, test_percentage=test_percentage
+    )
+    if test_data is not None:
+        X_test, Y_test = test_data[:, :-1], test_data[:, -1:]
 
     with tf.Session(config=TF_CONFIG) as sess:
         sess.run(tf.global_variables_initializer())
