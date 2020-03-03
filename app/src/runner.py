@@ -23,9 +23,9 @@ def get_data(data_path, scale):
                 # z-score scaling
                 X = preprocessing.scale(X)
             data[dset] = X
+            num_features = X.shape[1]
 
     _, Y = np.unique(Y, return_inverse=True)
-    num_features = data[dsets[0]].shape[1]
     num_classes = Y.max() + 1
 
     previous = 0
@@ -52,6 +52,7 @@ def run_env(
         print("EPISODE", episode)
         print("==========")
         old_state = env.reset()
+        seen_steps = episode_steps * (episode - 1)
         for step in range(1, episode_steps + 1):
             print("----------")
             print("STEP", step)
@@ -71,7 +72,7 @@ def run_env(
             if current_reward > best_reward:
                 best_reward = reward
                 best_state = [reward_raw, reward, old_state, new_state, indices]
-            if (step >= 200) and (step % 5 == 0):  # learn once for each 5 steps
+            if (seen_steps >= 200) and (step % 5 == 0):
                 agent.learn()
             if done:
                 print("This episode is done, start the next episode")
@@ -80,10 +81,10 @@ def run_env(
     return best_reward, best_state, reward_history
 
 
-def main(data_path, results_dir, scale=False):
+def main(data_path, results_dir, batch_size=128, reward_threshold=0.5, scale=False):
     train_data, test_data, num_features, num_classes = get_data(data_path, scale)
     reward_model = lambda X, **kwargs: cnn_reward_model(
-        X, num_classes, size1=10, size2=100, num_batches=50, **kwargs
+        X, num_classes, size1=10, size2=100, batch_size=batch_size, **kwargs
     )
     env = Env(
         train_data,
@@ -92,10 +93,11 @@ def main(data_path, results_dir, scale=False):
         len_max=128,
         num_features=num_features,
         num_classes=num_classes,
+        reward_threshold=reward_threshold,
     )
     agent = DeepQNetwork(
         e_greedy_increment=0.002,
-        e_greedy=0.8,
+        e_greedy=0.2,
         learning_rate=0.01,
         len_max=env.len_max,
         memory_size=2000,
@@ -137,6 +139,8 @@ if __name__ == "__main__":
     parser.add_argument("DATA_FILE")
     parser.add_argument("RESULTS_DIR")
     parser.add_argument("-d", "--debug", action="store_true")
+    parser.add_argument("-r", "--reward-threshold", type=float)
+    parser.add_argument("-b", "--batch-size", type=int)
 
     args = parser.parse_args()
 
@@ -145,5 +149,11 @@ if __name__ == "__main__":
 
         ptvsd.enable_attach(address=("0.0.0.0", 5678))
         ptvsd.wait_for_attach()
+    del args.debug
 
-    main(args.DATA_FILE, args.RESULTS_DIR)
+    args = vars(args)
+    main(
+        args.pop("DATA_FILE"),
+        args.pop("RESULTS_DIR"),
+        **{k: v for k, v in args.items() if v is not None},
+    )

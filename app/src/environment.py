@@ -11,10 +11,11 @@ class Env(object):
         train_data,
         test_data,
         reward_model,
-        len_max=128,
-        num_features=64,
-        num_classes=8,
         feature_indices=None,
+        len_max=128,
+        num_classes=8,
+        num_features=64,
+        reward_threshold=0.5,
     ):
         # we only have one attention bar, therefore, only have 1*2 table. [I,L]
         # I denotes Initial point, L denotes length
@@ -33,6 +34,7 @@ class Env(object):
         self.num_features = num_features
         self.reward = 0
         self.reward_model = reward_model
+        self.reward_threshold = reward_threshold
         self.test_data = test_data
         self.train_data = train_data
 
@@ -57,7 +59,7 @@ class Env(object):
             self.featurize_data(self.train_data),
             test_data=self.featurize_data(self.test_data),
         )
-        done = reward_raw > 0.5
+        done = reward_raw > self.reward_threshold
 
         # Silhouette Coefficient reward ranges from [-1,1], reward+1 range [0,2]
         start = int(self.bar["start"])

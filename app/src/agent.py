@@ -26,7 +26,7 @@ class DeepQNetwork:
         batch_size=32,
         dueling=True,
         e_greedy_increment=None,
-        e_greedy=0.8,
+        e_greedy=0.2,
         learning_rate=0.01,
         len_max=1000,
         memory_size=500,
@@ -34,13 +34,13 @@ class DeepQNetwork:
         num_features=2,
         output_graph=False,
         replace_target_iter=300,
-        reward_decay=0.9,
+        reward_decay=0.8,
     ):
 
         self.batch_size = batch_size
         self.cost_history = []
         self.dueling = dueling
-        self.epsilon = 0 if e_greedy_increment is not None else self.epsilon_max
+        self.epsilon = 0 if e_greedy_increment is not None else e_greedy
         self.epsilon_increment = e_greedy_increment
         self.epsilon_max = e_greedy
         self.gamma = reward_decay
