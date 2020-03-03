@@ -48,15 +48,12 @@ def run_env(
     reward_history=[],
 ):
     for episode in range(1, episodes + 1):
-        print("==========")
-        print("EPISODE", episode)
-        print("==========")
         old_state = env.reset()
         seen_steps = episode_steps * (episode - 1)
         for step in range(1, episode_steps + 1):
-            print("----------")
-            print("STEP", step)
-            print("----------")
+            print("==========")
+            print("EPISODE", episode, "STEP", step)
+            print("==========")
             action = agent.choose_action(old_state)  #
             # print('step', step, 'Action', action, 'state', state)
 
@@ -81,10 +78,23 @@ def run_env(
     return best_reward, best_state, reward_history
 
 
-def main(data_path, results_dir, batch_size=128, reward_threshold=0.5, scale=False):
+def main(
+    data_path,
+    results_dir,
+    batch_size=128,
+    reward_threshold=0.5,
+    scale=False,
+    test_epoch_frequency=10,
+):
     train_data, test_data, num_features, num_classes = get_data(data_path, scale)
     reward_model = lambda X, **kwargs: cnn_reward_model(
-        X, num_classes, size1=10, size2=100, batch_size=batch_size, **kwargs
+        X,
+        num_classes,
+        batch_size=batch_size,
+        conv_num_filters=10,
+        fc_num_units=100,
+        test_epoch_frequency=test_epoch_frequency,
+        **kwargs,
     )
     env = Env(
         train_data,
@@ -119,7 +129,7 @@ def main(data_path, results_dir, batch_size=128, reward_threshold=0.5, scale=Fal
 
     results_dir = Path(results_dir).resolve()
     if not results_dir.exists():
-        results_dir.mkdir()
+        results_dir.mkdir(parents=True)
     with open(results_dir / "results.pickle", "wb") as f:
         pickle.dump(
             {
@@ -139,8 +149,9 @@ if __name__ == "__main__":
     parser.add_argument("DATA_FILE")
     parser.add_argument("RESULTS_DIR")
     parser.add_argument("-d", "--debug", action="store_true")
-    parser.add_argument("-r", "--reward-threshold", type=float)
     parser.add_argument("-b", "--batch-size", type=int)
+    parser.add_argument("-r", "--reward-threshold", type=float)
+    parser.add_argument("-t", "--test-epoch-frequency", type=int)
 
     args = parser.parse_args()
 

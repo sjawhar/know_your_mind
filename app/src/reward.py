@@ -1,5 +1,4 @@
 import numpy as np
-import pickle
 import tensorflow as tf
 import time
 from scipy import stats
@@ -47,31 +46,36 @@ def bias_variable(shape):
 
 
 def get_conv_network(
-    num_features, num_classes, size1=10, size2=100, lambd=0.001, learning_rate=0.001
+    num_features,
+    num_classes,
+    conv_num_filters=10,
+    fc_num_units=100,
+    lambd=0.001,
+    learning_rate=0.001,
 ):
     xs = tf.placeholder(tf.float32, [None, num_features])
     ys = tf.placeholder(tf.int32, [None])
     keep_prob = tf.placeholder(tf.float32)
     x_image = tf.reshape(xs, [-1, 1, num_features, 1])
 
-    input_shape = num_features * size1
+    input_shape = num_features * conv_num_filters
 
     ## conv1 layer ##
-    W_conv1 = weight_variable([1, 2, 1, size1])
-    b_conv1 = bias_variable([size1])
+    W_conv1 = weight_variable([1, 2, 1, conv_num_filters])
+    b_conv1 = bias_variable([conv_num_filters])
     h_conv1 = tf.nn.relu(
         tf.nn.conv2d(x_image, W_conv1, strides=[1, 1, 1, 1], padding="SAME") + b_conv1
     )
     h_pool1_flat = tf.reshape(h_conv1, [-1, input_shape])
 
     ## fc1 layer ##
-    W_fc1 = weight_variable([input_shape, size2])
-    b_fc1 = bias_variable([size2])
+    W_fc1 = weight_variable([input_shape, fc_num_units])
+    b_fc1 = bias_variable([fc_num_units])
     h_fc1 = tf.nn.relu(tf.matmul(h_pool1_flat, W_fc1) + b_fc1)
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
     ## fc2 layer ##
-    W_fc2 = weight_variable([size2, num_classes])
+    W_fc2 = weight_variable([fc_num_units, num_classes])
     b_fc2 = bias_variable([num_classes])
     prediction = tf.matmul(h_fc1_drop, W_fc2) + b_fc2
 
@@ -108,22 +112,23 @@ def cnn_reward_model(
     data,
     num_classes,
     batch_size=128,
+    conv_num_filters=10,
+    fc_num_units=100,
     keep=1,
     lambd=0.001,
     learning_rate=0.001,
     n_neighbors=1,
     num_epochs=20,
-    size1=10,
-    size2=164,
     test_data=None,
+    test_epoch_frequency=10,
     test_percentage=0,
 ):
     num_features = data.shape[1] - 1
     network = get_conv_network(
         num_features,
         num_classes,
-        size1=size1,
-        size2=size2,
+        conv_num_filters=conv_num_filters,
+        fc_num_units=fc_num_units,
         lambd=lambd,
         learning_rate=learning_rate,
     )
@@ -143,7 +148,7 @@ def cnn_reward_model(
                 sess.run(
                     train_step, feed_dict={xs: X_train, ys: Y_train, keep_prob: keep},
                 )
-            if (epoch % 10) == 0:
+            if (test_epoch_frequency > 0) and (epoch % test_epoch_frequency) == 0:
                 print()
                 print("EPOCH", epoch)
                 print()
@@ -159,7 +164,7 @@ def cnn_reward_model(
                     )
                     print(set_name, "CNN accuracy", conv_acc)
                     print(set_name, "CNN loss", conv_loss)
-                    print(set_name, "prediction time", t2 - t1)
+                    print(set_name, "CNN prediction time", t2 - t1)
 
         D_train = np.vstack(
             [
@@ -176,9 +181,12 @@ def cnn_reward_model(
     Y_train = np.concatenate([y for _, y in batches])
     clf = KNeighborsClassifier(n_neighbors=n_neighbors)
     clf.fit(D_train, Y_train)
+    t1 = time.clock()
     Y_pred = clf.predict(D_test)
+    t2 = time.clock()
     acc = accuracy_score(Y_test, Y_pred)
-    print("Test KNN Accuracy", acc)
+    print("Test KNN accuracy", acc)
+    print("Test KNN prediction time", t2 - t1)
     print(classification_report(Y_test, Y_pred, digits=4))
 
     return acc
