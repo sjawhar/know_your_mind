@@ -92,6 +92,7 @@ def main(
         num_classes,
         batch_size=batch_size,
         conv_num_filters=10,
+        dropout=0,
         fc_num_units=100,
         test_epoch_frequency=test_epoch_frequency,
         **kwargs,
@@ -121,7 +122,7 @@ def main(
     _, _, _, attention, indices = best_state
     features = list(indices[int(attention["start"]) : int(attention["end"])]) + [-1]
     test_acc = reward_model(
-        train_data[:, features], test_data=test_data[:, features], test_percentage=0
+        train_data[:, features], test_data=test_data[:, features], test_percentage=0,
     )
     print("Best state", best_state)
     print("Best reward", best_reward)
