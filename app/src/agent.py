@@ -54,10 +54,8 @@ class DeepQNetwork:
         self.num_features = num_features
         self.replace_target_iter = replace_target_iter
 
-        # [s, a, r, indices, s_]
-        self.memory = np.zeros(
-            (self.memory_size, (num_features + 1) * 2 + 2 + self.len_max)
-        )
+        # [state_old, a, r, indices, state_new]
+        self.memory = np.zeros((self.memory_size, 2 * num_features + 2 + self.len_max))
 
         # consist of [target_net, evaluate_net]
         self._build_net()
@@ -141,14 +139,13 @@ class DeepQNetwork:
             return out
 
         # ------------------ build evaluate_net ------------------
-        self.s = tf.placeholder(
-            tf.float32, [None, self.num_features], name="s"
+        self.state_old = tf.placeholder(
+            tf.float32, [None, self.num_features], name="state_old"
         )  # input
         self.q_target = tf.placeholder(
             tf.float32, [None, self.num_actions], name="Q_target"
         )  # for calculating loss
-        # self.inputarray = tf.Variable(tf.constant(0, shape=[None, self.num_features]), dtype=tf.float32)
-        # self.inputarray = self.make_input_row(self.s)
+
         with tf.variable_scope("eval_net"):
             # c_names(collections_names) are the collections to store variables
             c_names, n_l1, w_initializer, b_initializer = (
@@ -169,7 +166,7 @@ class DeepQNetwork:
                 b1 = tf.get_variable(
                     "b1", [1, n_l1], initializer=b_initializer, collections=c_names
                 )
-                l1 = tf.nn.relu(tf.matmul(self.s, w1) + b1)
+                l1 = tf.nn.relu(tf.matmul(self.state_old, w1) + b1)
 
             # second layer. collections is used later when assign to target net
             with tf.variable_scope("l2"):
@@ -196,10 +193,9 @@ class DeepQNetwork:
             self._train_op = tf.train.RMSPropOptimizer(self.lr).minimize(self.loss)
 
         # ------------------ build target_net ------------------
-        self.s_ = tf.placeholder(
-            tf.float32, [None, self.num_features], name="s_"
-        )  # input, s_ denotes s' or s_{t+1}
-        # self.inputarray_ = self.make_input_row(self.s_)
+        self.state_new = tf.placeholder(
+            tf.float32, [None, self.num_features], name="state_new"
+        )
 
         with tf.variable_scope("target_net"):
             # c_names(collections_names) are the collections to store variables
@@ -216,7 +212,7 @@ class DeepQNetwork:
                 b1 = tf.get_variable(
                     "b1", [1, n_l1], initializer=b_initializer, collections=c_names
                 )
-                l1 = tf.nn.relu(tf.matmul(self.s_, w1) + b1)
+                l1 = tf.nn.relu(tf.matmul(self.state_new, w1) + b1)
 
             # second layer. collections is used later when assign to target net
             with tf.variable_scope("l2"):
@@ -235,33 +231,23 @@ class DeepQNetwork:
                 self.q_next = tf.matmul(l1, w2) + b2
 
     def store_transition(
-        self, s, a, r, indices, s_,
+        self, state_old, a, r, indices, state_new,
     ):
         if not hasattr(self, "memory_counter"):
             self.memory_counter = 0
 
-        # change the tuple s to narray s
-        s = np.asarray([x for xs in s for x in xs])
-        s_ = np.array([x for xs in s_ for x in xs])
-        logger.debug(f"s - {s}")
+        state_old = np.asarray([x for xs in state_old for x in xs])
+        state_new = np.array([x for xs in state_new for x in xs])
+        logger.debug(f"state_old - {state_old}")
         logger.debug(f"[a, r] - {[a, r]}")
-        logger.debug(f"s_ - {s}")
-        transition = np.hstack((s, [a, r], indices, s_))
+        logger.debug(f"state_new - {state_new}")
+        transition = np.hstack((state_old, [a, r], indices, state_new))
 
         # replace the old memory with new memory
         index = self.memory_counter % self.memory_size
         self.memory[index, :] = transition
 
         self.memory_counter += 1
-
-    def make_input_row(self, state):
-        input_array = np.zeros(self.num_features)
-        state = state[0]
-        logger.info(f"state - {state}")
-        # state[0][0] is the start point in the state, state[0][-1] is the end point, make the attention bar as 1.
-        input_array[state[0] : state[-1] + 1] = 1
-        input_array = input_array[np.newaxis, :]
-        return input_array
 
     def choose_action(self, state):
         # to have batch dimension when feed into tf placeholder
@@ -272,13 +258,12 @@ class DeepQNetwork:
         short_state = np.asarray([x for xs in short_state for x in xs])
         short_state = short_state[np.newaxis, :]
 
-        # make the intial input_array
-        # input_array = self.make_input_row(state)
-
         if np.random.uniform() < self.epsilon:
             # forward feed the state and get q value for every actions
 
-            actions_value = self.sess.run(self.q_eval, feed_dict={self.s: short_state})
+            actions_value = self.sess.run(
+                self.q_eval, feed_dict={self.state_old: short_state}
+            )
             action = np.argmax(actions_value)
         else:
             action = np.random.randint(0, self.num_actions)
@@ -300,8 +285,8 @@ class DeepQNetwork:
         q_next, q_eval = self.sess.run(
             [self.q_next, self.q_eval],
             feed_dict={
-                self.s_: batch_memory[:, -self.num_features :],  # fixed params
-                self.s: batch_memory[:, : self.num_features],  # newest params
+                self.state_new: batch_memory[:, -self.num_features :],  # fixed params
+                self.state_old: batch_memory[:, : self.num_features],  # newest params
             },
         )
 
@@ -346,7 +331,7 @@ class DeepQNetwork:
         _, self.cost = self.sess.run(
             [self._train_op, self.loss],
             feed_dict={
-                self.s: batch_memory[:, : self.num_features],
+                self.state_old: batch_memory[:, : self.num_features],
                 self.q_target: q_target,
             },
         )

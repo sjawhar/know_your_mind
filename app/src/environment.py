@@ -5,6 +5,11 @@ import pickle
 
 logger = logging.getLogger(__name__)
 
+ACTION_CONTRACT = 0
+ACTION_EXPAND = 1
+ACTION_MOVE_LEFT = 2
+ACTION_MOVE_RIGHT = 3
+
 
 class Env(object):
     viewer = None
@@ -20,18 +25,12 @@ class Env(object):
         num_features=64,
         reward_threshold=0.5,
     ):
-        # we only have one attention bar, therefore, only have 1*2 table. [I,L]
-        # I denotes Initial point, L denotes length
-        self.bar = np.zeros(
-            1,
-            dtype=[("start", np.float32), ("end", np.float32), ("length", np.float32),],
-        )
-        self.bar["end"] = self.bar["start"] + self.bar["length"]
-        self.bar["length"] = 64  # the length of attention bar
-        self.bar["start"] = 0  # the initial point of attention bar
+        self.bar = np.zeros(1, dtype=[("start", np.float32), ("end", np.float32)],)
+        self.bar["start"] = 0
+        self.bar["end"] = self.bar["start"] + len_max // 2
         self.beta = 0.1
         self.len_max = len_max
-        self.min_length = 15
+        self.min_length = 10
         self.num_actions = 4
         self.num_classes = num_classes
         self.num_features = num_features
@@ -65,7 +64,6 @@ class Env(object):
         done = reward_raw > self.reward_threshold
 
         start = int(self.bar["start"])
-        length = int(self.bar["length"])
         end = int(self.bar["end"])
         self.reward = (
             math.exp(reward_raw) / (math.exp(1) - 1)
@@ -73,38 +71,26 @@ class Env(object):
         )
 
         move = np.random.randint(1, high=15, size=1)
-        # To caculate the next state from the current state
-        if action == 0:
-            # move left
-            self.bar["start"] = self.clip(start - move)
-            self.bar["end"] = self.clip(self.bar["start"] + length)
-        elif action == 1:
-            # move right
-            self.bar["start"] = self.clip(start + move)
-            self.bar["end"] = self.clip(self.bar["start"] + length)
-        elif action == 2:
-            # contract
+        if action == ACTION_CONTRACT:
             self.bar["start"] = self.clip(start + move)
             self.bar["end"] = self.clip(end - move)
-            self.bar["length"] = self.bar["end"] - self.bar["start"]
-        elif action == 3:
-            # expand
+        elif action == ACTION_EXPAND:
             self.bar["start"] = self.clip(start - move)
             self.bar["end"] = self.clip(end + move)
-            self.bar["length"] = self.bar["end"] - self.bar["start"]
+        elif action == ACTION_MOVE_LEFT:
+            self.bar["start"] = self.clip(start - move)
+            self.bar["end"] = self.clip(end - move)
+        elif action == ACTION_MOVE_RIGHT:
+            self.bar["start"] = self.clip(start + move)
+            self.bar["end"] = self.clip(end + move)
 
         if self.bar["end"] - self.bar["start"] < self.min_length:
             self.bar["start"] = self.clip(self.bar["end"] - self.min_length)
-            self.bar["end"] = self.bar["start"] + self.min_length
-            self.bar["length"] = self.bar["end"] - self.bar["start"]
+            self.bar["end"] = self.clip(self.bar["start"] + self.min_length)
 
         return self.bar, self.reward, done, reward_raw, self.feature_indices
 
     def reset(self):
-        self.bar["start"] = (self.len_max - self.num_features) / 2
-        self.bar["length"] = self.num_features
-        # self.bar['length'] = self.num_features+6  # for short features, e.g., only 3 dimensions
-
-        self.bar["end"] = self.clip(self.bar["start"] + self.bar["length"])
-        self.bar["start"] = self.clip(self.bar["start"])
+        self.bar["start"] = self.clip((self.len_max - self.num_features) // 2)
+        self.bar["end"] = self.clip(self.bar["start"] + self.num_features)
         return self.bar

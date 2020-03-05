@@ -13,6 +13,7 @@ parser.add_argument("-d", "--dropout", type=float)
 parser.add_argument("-r", "--reward-threshold", type=float)
 parser.add_argument("-t", "--test-epoch-frequency", type=int)
 parser.add_argument("-v", "--verbose", action="store_true")
+parser.add_argument("-w", "--warmup", type=int)
 
 if __name__ == "__main__":
     args = parser.parse_args()

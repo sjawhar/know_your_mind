@@ -50,36 +50,38 @@ def run_env(
     episode_steps=50,
     episodes=50,
     reward_history=[],
+    warmup=200,
 ):
+    step_absolute = 0
     for episode in range(1, episodes + 1):
-        old_state = env.reset()
-        seen_steps = episode_steps * (episode - 1)
+        state_new = env.reset()
         for step in range(1, episode_steps + 1):
             logger.info("==========")
             logger.info(f"EPISODE {episode} STEP {step}")
             logger.info("==========")
-            action = agent.choose_action(old_state)  #
+            step_absolute += 1
+            state_old = np.copy(state_new)
+            action = agent.choose_action(state_old)
 
-            new_state, reward, done, reward_raw, indices = env.step(action)
-            logger.debug(f"old_state - {old_state}")
+            state_new, reward, done, reward_raw, indices = env.step(action)
+            logger.debug(f"state_old - {state_old}")
             logger.debug(f"action - {action}")
-            logger.debug(f"new_state - {new_state}")
+            logger.debug(f"state_new - {state_new}")
             logger.debug(f"reward - {reward}")
             logger.debug(f"reward_raw - {reward_raw}")
             logger.debug(f"done - {done}")
 
-            agent.store_transition(old_state, action, reward, indices, new_state)
+            agent.store_transition(state_old, action, reward, indices, state_new)
             reward_history.append([episode, step, reward])
 
             if reward > best_reward:
                 best_reward = reward
-                best_state = [reward_raw, reward, old_state, new_state, indices]
-            if (seen_steps >= 200) and (step % 5 == 0):
+                best_state = [reward_raw, reward, state_old, state_new, indices]
+            if (step_absolute >= warmup) and (step_absolute % 5 == 0):
                 agent.learn()
             if done:
                 logger.info("This episode is done, start the next episode")
                 break
-            old_state = new_state
     return best_reward, best_state, reward_history
 
 
@@ -91,6 +93,7 @@ def run(
     reward_threshold=0.5,
     scale=False,
     test_epoch_frequency=10,
+    warmup=200,
 ):
     train_data, test_data, num_features, num_classes = get_data(data_path, scale)
     reward_model = lambda X, **kwargs: cnn_reward_model(
@@ -123,7 +126,7 @@ def run(
         replace_target_iter=200,
         reward_decay=0.8,
     )
-    best_reward, best_state, reward_history = run_env(env, agent)
+    best_reward, best_state, reward_history = run_env(env, agent, warmup=warmup)
     _, _, _, attention, indices = best_state
     features = list(indices[int(attention["start"]) : int(attention["end"])]) + [-1]
     test_acc = reward_model(
