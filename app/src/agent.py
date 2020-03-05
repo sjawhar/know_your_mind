@@ -49,6 +49,7 @@ class DeepQNetwork:
         self.learn_step_counter = 0
         self.len_max = len_max
         self.lr = learning_rate
+        self.memory_counter = 0
         self.memory_size = memory_size
         self.num_actions = num_actions
         self.num_features = num_features
@@ -233,8 +234,7 @@ class DeepQNetwork:
     def store_transition(
         self, state_old, a, r, indices, state_new,
     ):
-        if not hasattr(self, "memory_counter"):
-            self.memory_counter = 0
+        logger.debug("Storing transition...")
 
         state_old = np.asarray([x for xs in state_old for x in xs])
         state_new = np.array([x for xs in state_new for x in xs])
@@ -250,6 +250,7 @@ class DeepQNetwork:
         self.memory_counter += 1
 
     def choose_action(self, state):
+        logger.debug("Choosing action...")
         # to have batch dimension when feed into tf placeholder
         short_state = np.zeros(1, dtype=[("start", np.float32), ("end", np.float32)])
         short_state["start"] = state["start"]
@@ -271,9 +272,10 @@ class DeepQNetwork:
 
     def learn(self):
         # check to replace target parameters
+        logger.debug("Starting agent training...")
         if self.learn_step_counter % self.replace_target_iter == 0:
             self.sess.run(self.replace_target_op)
-            logger.info("\ntarget_params_replaced\n")
+            logger.info("Target_params_replaced")
 
         # sample batch memory from all memory
         if self.memory_counter > self.memory_size:

@@ -75,12 +75,14 @@ def run_env(
             reward_history.append([episode, step, reward])
 
             if reward > best_reward:
+                logger.debug("Best reward yet!")
                 best_reward = reward
                 best_state = [reward_raw, reward, state_old, state_new, indices]
             if (step_absolute >= warmup) and (step_absolute % 5 == 0):
+                logger.info("Time to learn!")
                 agent.learn()
             if done:
-                logger.info("This episode is done, start the next episode")
+                logger.info("This episode is done. Start the next episode!")
                 break
     return best_reward, best_state, reward_history
 

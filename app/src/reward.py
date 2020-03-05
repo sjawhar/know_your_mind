@@ -172,7 +172,7 @@ def cnn_reward_model(
     acc = accuracy_score(Y_test, Y_pred)
     logger.info(f"Test KNN accuracy - {acc}")
     logger.info(f"Test KNN prediction time - {t2 - t1}")
-    logger.info(classification_report(Y_test, Y_pred, digits=4))
+    logger.info("\n" + classification_report(Y_test, Y_pred, digits=4))
 
     del g
     return acc
