@@ -22,7 +22,7 @@ def get_data(data_path, scale):
             X = f[dset][:, :-1]
             Y += list(f[dset][:, -1])
 
-            logger.debug(dset, "shape", X.shape)
+            logger.debug(f"{dset} shape - {X.shape}")
 
             if scale is True:
                 X = preprocessing.scale(X)

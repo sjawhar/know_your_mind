@@ -106,14 +106,16 @@ def cnn_reward_model(
 ):
     logger.debug("Building CNN reward model...")
     num_features = data.shape[1] - 1
-    network = get_conv_network(
-        num_features,
-        num_classes,
-        conv_num_filters=conv_num_filters,
-        fc_num_units=fc_num_units,
-        lambd=lambd,
-        learning_rate=learning_rate,
-    )
+    g = tf.Graph()
+    with g.as_default():
+        network = get_conv_network(
+            num_features,
+            num_classes,
+            conv_num_filters=conv_num_filters,
+            fc_num_units=fc_num_units,
+            lambd=lambd,
+            learning_rate=learning_rate,
+        )
 
     xs, ys, drop, train_step, embedding, prediction, loss = network
     batches, test_split_data = get_batches_and_test(
@@ -125,7 +127,7 @@ def cnn_reward_model(
     X_test, Y_test = test_data[:, :-1], test_data[:, -1]
 
     logger.debug("Starting training...")
-    with tf.Session(config=TF_CONFIG) as sess:
+    with tf.Session(config=TF_CONFIG, graph=g) as sess:
         sess.run(tf.global_variables_initializer())
         for epoch in range(1, num_epochs + 1):
             logger.debug(f"Starting epoch {epoch}...")
@@ -172,4 +174,5 @@ def cnn_reward_model(
     logger.info(f"Test KNN prediction time - {t2 - t1}")
     logger.info(classification_report(Y_test, Y_pred, digits=4))
 
+    del g
     return acc
