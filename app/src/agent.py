@@ -10,11 +10,13 @@ Tensorflow: 1.0
 gym: 0.7.3
 """
 
+import logging
 import numpy as np
 import pandas as pd
 import tensorflow as tf
 import itertools
 
+logger = logging.getLogger(__name__)
 # np.random.seed(1)
 # tf.set_random_seed(1)
 
@@ -241,7 +243,9 @@ class DeepQNetwork:
         # change the tuple s to narray s
         s = np.asarray([x for xs in s for x in xs])
         s_ = np.array([x for xs in s_ for x in xs])
-        # print('s, [a, r], s_', s, [a, r], s_)
+        logger.debug(f"s - {s}")
+        logger.debug(f"[a, r] - {[a, r]}")
+        logger.debug(f"s_ - {s}")
         transition = np.hstack((s, [a, r], indices, s_))
 
         # replace the old memory with new memory
@@ -252,9 +256,8 @@ class DeepQNetwork:
 
     def make_input_row(self, state):
         input_array = np.zeros(self.num_features)
-        print("sssss", state)
         state = state[0]
-        print(state)
+        logger.info(f"state - {state}")
         # state[0][0] is the start point in the state, state[0][-1] is the end point, make the attention bar as 1.
         input_array[state[0] : state[-1] + 1] = 1
         input_array = input_array[np.newaxis, :]
@@ -268,7 +271,6 @@ class DeepQNetwork:
 
         short_state = np.asarray([x for xs in short_state for x in xs])
         short_state = short_state[np.newaxis, :]
-        # print(state, state.shape)
 
         # make the intial input_array
         # input_array = self.make_input_row(state)
@@ -286,7 +288,7 @@ class DeepQNetwork:
         # check to replace target parameters
         if self.learn_step_counter % self.replace_target_iter == 0:
             self.sess.run(self.replace_target_op)
-            print("\ntarget_params_replaced\n")
+            logger.info("\ntarget_params_replaced\n")
 
         # sample batch memory from all memory
         if self.memory_counter > self.memory_size:

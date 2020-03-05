@@ -1,6 +1,9 @@
+import logging
 import math
 import numpy as np
 import pickle
+
+logger = logging.getLogger(__name__)
 
 
 class Env(object):
@@ -43,7 +46,7 @@ class Env(object):
                 self.num_features, size=len_max, replace=True
             )
         self.feature_indices = feature_indices
-        print("feature indices", feature_indices)
+        logger.debug(f"feature_indices - {feature_indices}")
 
     def clip(self, dd):
         return np.clip(dd, a_min=0, a_max=self.len_max - 1)
@@ -61,7 +64,6 @@ class Env(object):
         )
         done = reward_raw > self.reward_threshold
 
-        # Silhouette Coefficient reward ranges from [-1,1], reward+1 range [0,2]
         start = int(self.bar["start"])
         length = int(self.bar["length"])
         end = int(self.bar["end"])
@@ -106,6 +108,3 @@ class Env(object):
         self.bar["end"] = self.clip(self.bar["start"] + self.bar["length"])
         self.bar["start"] = self.clip(self.bar["start"])
         return self.bar
-
-    def sample_action(self):
-        return np.random.rand(2) - 0.5  # two radians

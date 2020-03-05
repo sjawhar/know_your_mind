@@ -1,11 +1,16 @@
 import h5py
+import logging
 import numpy as np
 import pickle
 import scipy.io as sc
-from agent import DeepQNetwork
-from environment import Env
+from .agent import DeepQNetwork
+from .environment import Env
+from .reward import cnn_reward_model
 from pathlib import Path
-from reward import cnn_reward_model
+from sklearn import preprocessing
+
+
+logger = logging.getLogger(__name__)
 
 
 def get_data(data_path, scale):
@@ -17,10 +22,9 @@ def get_data(data_path, scale):
             X = f[dset][:, :-1]
             Y += list(f[dset][:, -1])
 
-            print(dset, X.shape)
+            logger.debug(dset, "shape", X.shape)
 
             if scale is True:
-                # z-score scaling
                 X = preprocessing.scale(X)
             data[dset] = X
             num_features = X.shape[1]
@@ -51,37 +55,39 @@ def run_env(
         old_state = env.reset()
         seen_steps = episode_steps * (episode - 1)
         for step in range(1, episode_steps + 1):
-            print("==========")
-            print("EPISODE", episode, "STEP", step)
-            print("==========")
+            logger.info("==========")
+            logger.info(f"EPISODE {episode} STEP {step}")
+            logger.info("==========")
             action = agent.choose_action(old_state)  #
-            # print('step', step, 'Action', action, 'state', state)
 
             new_state, reward, done, reward_raw, indices = env.step(action)
-            # print('new_state, reward, done, reward_raw', new_state, reward, done, reward_raw)
-            # store the state, action, reward and the next state
-            # print(old_state.shape, action.shape, reward.shape, new_state.shape)
+            logger.debug(f"old_state - {old_state}")
+            logger.debug(f"action - {action}")
+            logger.debug(f"new_state - {new_state}")
+            logger.debug(f"reward - {reward}")
+            logger.debug(f"reward_raw - {reward_raw}")
+            logger.debug(f"done - {done}")
+
             agent.store_transition(old_state, action, reward, indices, new_state)
             reward_history.append([episode, step, reward])
-            # record best reward
-            current_reward = reward
 
-            if current_reward > best_reward:
+            if reward > best_reward:
                 best_reward = reward
                 best_state = [reward_raw, reward, old_state, new_state, indices]
             if (seen_steps >= 200) and (step % 5 == 0):
                 agent.learn()
             if done:
-                print("This episode is done, start the next episode")
+                logger.info("This episode is done, start the next episode")
                 break
             old_state = new_state
     return best_reward, best_state, reward_history
 
 
-def main(
+def run(
     data_path,
     results_dir,
     batch_size=128,
+    dropout=0.2,
     reward_threshold=0.5,
     scale=False,
     test_epoch_frequency=10,
@@ -92,7 +98,7 @@ def main(
         num_classes,
         batch_size=batch_size,
         conv_num_filters=10,
-        dropout=0,
+        dropout=dropout,
         fc_num_units=100,
         test_epoch_frequency=test_epoch_frequency,
         **kwargs,
@@ -116,7 +122,6 @@ def main(
         num_features=2,
         replace_target_iter=200,
         reward_decay=0.8,
-        # output_graph=True,
     )
     best_reward, best_state, reward_history = run_env(env, agent)
     _, _, _, attention, indices = best_state
@@ -124,9 +129,9 @@ def main(
     test_acc = reward_model(
         train_data[:, features], test_data=test_data[:, features], test_percentage=0,
     )
-    print("Best state", best_state)
-    print("Best reward", best_reward)
-    print("Final accuracy:", test_acc)
+    logger.info(f"Best state - {best_state}")
+    logger.info(f"Best reward - {best_reward}")
+    logger.info(f"Final accuracy - {test_acc}")
 
     results_dir = Path(results_dir).resolve()
     if not results_dir.exists():
@@ -141,31 +146,3 @@ def main(
             },
             f,
         )
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(prog="know_your_mind")
-    parser.add_argument("DATA_FILE")
-    parser.add_argument("RESULTS_DIR")
-    parser.add_argument("-d", "--debug", action="store_true")
-    parser.add_argument("-b", "--batch-size", type=int)
-    parser.add_argument("-r", "--reward-threshold", type=float)
-    parser.add_argument("-t", "--test-epoch-frequency", type=int)
-
-    args = parser.parse_args()
-
-    if args.debug:
-        import ptvsd
-
-        ptvsd.enable_attach(address=("0.0.0.0", 5678))
-        ptvsd.wait_for_attach()
-    del args.debug
-
-    args = vars(args)
-    main(
-        args.pop("DATA_FILE"),
-        args.pop("RESULTS_DIR"),
-        **{k: v for k, v in args.items() if v is not None},
-    )
