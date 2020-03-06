@@ -30,7 +30,6 @@ class DeepQNetwork:
         e_greedy_increment=None,
         e_greedy=0.2,
         learning_rate=0.01,
-        len_max=1000,
         memory_size=500,
         num_actions=4,
         num_features=2,
@@ -47,7 +46,6 @@ class DeepQNetwork:
         self.epsilon_max = e_greedy
         self.gamma = reward_decay
         self.learn_step_counter = 0
-        self.len_max = len_max
         self.lr = learning_rate
         self.memory_counter = 0
         self.memory_size = memory_size
@@ -55,8 +53,8 @@ class DeepQNetwork:
         self.num_features = num_features
         self.replace_target_iter = replace_target_iter
 
-        # [state_old, a, r, indices, state_new]
-        self.memory = np.zeros((self.memory_size, 2 * num_features + 2 + self.len_max))
+        # [state_old, a, r, state_new]
+        self.memory = np.zeros((self.memory_size, 2 * num_features + 2))
 
         # consist of [target_net, evaluate_net]
         self._build_net()
@@ -231,44 +229,28 @@ class DeepQNetwork:
                 )
                 self.q_next = tf.matmul(l1, w2) + b2
 
-    def store_transition(
-        self, state_old, a, r, indices, state_new,
-    ):
+    def store_transition(self, state_old, a, r, state_new):
         logger.debug("Storing transition...")
-
-        state_old = np.asarray([x for xs in state_old for x in xs])
-        state_new = np.array([x for xs in state_new for x in xs])
         logger.debug(f"state_old - {state_old}")
         logger.debug(f"[a, r] - {[a, r]}")
         logger.debug(f"state_new - {state_new}")
-        transition = np.hstack((state_old, [a, r], indices, state_new))
 
-        # replace the old memory with new memory
         index = self.memory_counter % self.memory_size
-        self.memory[index, :] = transition
-
+        self.memory[index, :] = [*state_old, a, r, *state_new]
         self.memory_counter += 1
 
     def choose_action(self, state):
         logger.debug("Choosing action...")
-        # to have batch dimension when feed into tf placeholder
-        short_state = np.zeros(1, dtype=[("start", np.float32), ("end", np.float32)])
-        short_state["start"] = state["start"]
-        short_state["end"] = state["end"]
 
-        short_state = np.asarray([x for xs in short_state for x in xs])
-        short_state = short_state[np.newaxis, :]
+        if np.random.uniform() >= self.epsilon:
+            logger.debug("Choosing random action")
+            return np.random.randint(0, self.num_actions)
 
-        if np.random.uniform() < self.epsilon:
-            # forward feed the state and get q value for every actions
-
-            actions_value = self.sess.run(
-                self.q_eval, feed_dict={self.state_old: short_state}
-            )
-            action = np.argmax(actions_value)
-        else:
-            action = np.random.randint(0, self.num_actions)
-        return action
+        # Make a batch of one sample to match expected dimensions
+        state = np.array([state], dtype=np.float32)
+        action_values = self.sess.run(self.q_eval, feed_dict={self.state_old: state})
+        logger.debug(f"Action values - {action_values}")
+        return np.argmax(action_values)
 
     def learn(self):
         # check to replace target parameters
@@ -278,10 +260,8 @@ class DeepQNetwork:
             logger.info("Target_params_replaced")
 
         # sample batch memory from all memory
-        if self.memory_counter > self.memory_size:
-            sample_index = np.random.choice(self.memory_size, size=self.batch_size)
-        else:
-            sample_index = np.random.choice(self.memory_counter, size=self.batch_size)
+        memory_size = min(self.memory_counter, self.memory_size)
+        sample_index = np.random.choice(memory_size, size=self.batch_size)
         batch_memory = self.memory[sample_index, :]
 
         q_next, q_eval = self.sess.run(

@@ -46,7 +46,7 @@ def run_env(
     env,
     agent,
     best_reward=0,
-    best_state=[],
+    best_state_info=[],
     episode_steps=50,
     episodes=50,
     reward_history=[],
@@ -60,10 +60,10 @@ def run_env(
             logger.info(f"EPISODE {episode} STEP {step}")
             logger.info("==========")
             step_absolute += 1
-            state_old = np.copy(state_new)
+            state_old = state_new[:]
             action = agent.choose_action(state_old)
 
-            state_new, reward, done, reward_raw, indices = env.step(action)
+            state_new, reward, reward_raw, done = env.step(action)
             logger.debug(f"state_old - {state_old}")
             logger.debug(f"action - {action}")
             logger.debug(f"state_new - {state_new}")
@@ -71,20 +71,20 @@ def run_env(
             logger.debug(f"reward_raw - {reward_raw}")
             logger.debug(f"done - {done}")
 
-            agent.store_transition(state_old, action, reward, indices, state_new)
-            reward_history.append([episode, step, reward])
+            agent.store_transition(state_old, action, reward, state_new)
+            reward_history.append([step_absolute, (episode, step), reward])
 
             if reward > best_reward:
                 logger.debug("Best reward yet!")
                 best_reward = reward
-                best_state = [reward_raw, reward, state_old, state_new, indices]
+                best_state_info = [state_new, reward_raw, state_old]
             if (step_absolute >= warmup) and (step_absolute % 5 == 0):
                 logger.info("Time to learn!")
                 agent.learn()
             if done:
                 logger.info("This episode is done. Start the next episode!")
                 break
-    return best_reward, best_state, reward_history
+    return best_state_info, best_reward, reward_history
 
 
 def run(
@@ -121,20 +121,23 @@ def run(
         e_greedy_increment=0.002,
         e_greedy=0.2,
         learning_rate=0.01,
-        len_max=env.len_max,
         memory_size=2000,
         num_actions=env.num_actions,
-        num_features=2,
+        num_features=len(env.get_state()),
         replace_target_iter=200,
         reward_decay=0.8,
     )
-    best_reward, best_state, reward_history = run_env(env, agent, warmup=warmup)
-    _, _, _, attention, indices = best_state
-    features = list(indices[int(attention["start"]) : int(attention["end"])]) + [-1]
+    best_state_info, best_reward, reward_history = run_env(env, agent, warmup=warmup)
+    best_state, best_acc, _ = best_state_info
+
+    env.set_state(best_state)
     test_acc = reward_model(
-        train_data[:, features], test_data=test_data[:, features], test_percentage=0,
+        env.featurize_data(train_data),
+        test_data=env.featurize_data(test_data),
+        test_percentage=0,
     )
     logger.info(f"Best state - {best_state}")
+    logger.info(f"Best accuracy - {best_acc}")
     logger.info(f"Best reward - {best_reward}")
     logger.info(f"Final accuracy - {test_acc}")
 
@@ -144,8 +147,9 @@ def run(
     with open(results_dir / "results.pickle", "wb") as f:
         pickle.dump(
             {
-                "best_state": best_state,
+                "best_state": best_state_info,
                 "cost_history": agent.cost_history,
+                "feature_indices": env.feature_indices,
                 "reward_history": reward_history,
                 "test_acc": test_acc,
             },
